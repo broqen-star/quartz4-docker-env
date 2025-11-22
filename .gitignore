@@ -1,0 +1,7 @@
+gitea/
+postgres/
+quartz/
+public/
+
+*.log
+*.tmp

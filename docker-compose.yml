@@ -1,0 +1,50 @@
+services:
+  gitea:
+    image: gitea/gitea:latest
+    environment:
+      - DB_TYPE=postgres
+      - DB_HOST=db:5432
+      - DB_NAME=gitea
+      - DB_USER=gitea
+      - DB_PASSWD=gitea
+      - GITEA__webhook__ALLOWED_HOST_LIST=*
+    ports:
+      - "3000:3000"
+      - "222:22"
+    volumes:
+      - ./gitea:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - db
+
+  db:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+      - POSTGRES_DB=gitea
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+
+  quartz:
+    image: node:22
+    working_dir: /quartz
+    volumes:
+      - ./public:/deploy/public
+      - ./quartz:/quartz
+      - ./vault:/quartz/content:ro
+      - ./webhook-server.js:/quartz/webhook-server.js:ro
+    command: node webhook-server.js
+    ports:
+      - "4000:4000"
+
+  web:
+    image: nginx:latest
+    volumes:
+      - ./public:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+
+volumes:
+  quartz_public:

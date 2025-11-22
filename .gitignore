@@ -1,6 +1,7 @@
 gitea/
 postgres/
 quartz/
+vault/
 public/
 
 *.log

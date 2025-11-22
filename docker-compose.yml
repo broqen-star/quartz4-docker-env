@@ -32,7 +32,7 @@ services:
     volumes:
       - ./public:/deploy/public
       - ./quartz:/quartz
-      - ./vault:/quartz/content:ro
+      - ./vault:/quartz/content
       - ./webhook-server.js:/quartz/webhook-server.js:ro
     command: node webhook-server.js
     ports:

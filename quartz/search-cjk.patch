@@ -1,0 +1,59 @@
+diff --git a/quartz/components/scripts/search.inline.ts b/quartz/components/scripts/search.inline.ts
+index 6a84a50..9073934 100644
+--- a/quartz/components/scripts/search.inline.ts
++++ b/quartz/components/scripts/search.inline.ts
+@@ -17,10 +17,50 @@ type SearchType = "basic" | "tags"
+ let searchType: SearchType = "basic"
+ let currentSearchTerm: string = ""
+ const encoder = (str: string) => {
+-  return str
+-    .toLowerCase()
+-    .split(/\s+/)
+-    .filter((token) => token.length > 0)
++  // CJK-aware tokenizer: split Japanese/Chinese/Korean text into single
++  // characters (unigrams) so mid-sentence terms are searchable, while
++  // keeping whitespace splitting for Latin scripts.
++  const tokens: string[] = []
++  let bufferStart = -1
++  let bufferEnd = -1
++  const lower = str.toLowerCase()
++  let i = 0
++
++  for (const char of lower) {
++    const code = char.codePointAt(0)!
++
++    const isCJK =
++      (code >= 0x3040 && code <= 0x309f) || // Hiragana
++      (code >= 0x30a0 && code <= 0x30ff) || // Katakana
++      (code >= 0x4e00 && code <= 0x9fff) || // CJK Unified Ideographs
++      (code >= 0xac00 && code <= 0xd7af) || // Hangul
++      (code >= 0x20000 && code <= 0x2a6df) // CJK Extension B
++
++    const isWhitespace = code === 32 || code === 9 || code === 10 || code === 13
++
++    if (isCJK) {
++      if (bufferStart !== -1) {
++        tokens.push(lower.slice(bufferStart, bufferEnd))
++        bufferStart = -1
++      }
++      tokens.push(char)
++    } else if (isWhitespace) {
++      if (bufferStart !== -1) {
++        tokens.push(lower.slice(bufferStart, bufferEnd))
++        bufferStart = -1
++      }
++    } else {
++      if (bufferStart === -1) bufferStart = i
++      bufferEnd = i + 1
++    }
++    i += char.length
++  }
++
++  if (bufferStart !== -1) {
++    tokens.push(lower.slice(bufferStart))
++  }
++
++  return tokens
+ }
+ 
+ let index = new FlexSearch.Document<Item>({

@@ -1,0 +1,4 @@
+// 記事一覧の日付欄が2行に折り返すのを防ぐ(標準の 8em -> 8.5em)
+li.section-li > .section {
+  grid-template-columns: fit-content(8.5em) 3fr 1fr;
+}

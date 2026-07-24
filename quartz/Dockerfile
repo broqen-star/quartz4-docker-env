@@ -26,6 +26,10 @@ RUN npm ci
 # (runtimeでもbind-mountされるので、編集→再ビルドで反映可能)
 COPY quartz.config.ts ./quartz.config.ts
 COPY quartz.layout.ts ./quartz.layout.ts
+# カスタムCSS: styles/ をまるごと quartz/styles/custom/ として持ち込み、
+# 本体のcustom.scssはそれを読み込むだけのローダーにする
+COPY styles/ ./quartz/styles/custom/
+RUN printf '@use "./base.scss";\n@use "./custom/index.scss";\n' > quartz/styles/custom.scss
 COPY webhook-server.js ./webhook-server.js
 
 EXPOSE 4000

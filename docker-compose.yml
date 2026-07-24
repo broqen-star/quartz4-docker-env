@@ -48,6 +48,7 @@ services:
       - ./public:/quartz/public                # ビルド成果物(nginxが配信)
       - ./quartz/quartz.config.ts:/quartz/quartz.config.ts:ro
       - ./quartz/quartz.layout.ts:/quartz/quartz.layout.ts:ro
+      - ./quartz/styles:/quartz/quartz/styles/custom:ro   # カスタムCSS(ディレクトリごと)
     ports:
       - "4000:4000"   # webhook (手動trigger/デバッグ用。不要なら削除可)
     depends_on:

@@ -1,4 +1,4 @@
-# quartz4-docker-env (simple)
+# quartz4-docker-env
 
 Obsidianで作ったコンテンツを、スタンドアロン環境のWebサーバーに公開する構成です。
 
@@ -117,9 +117,8 @@ Quartz v4 標準の検索は、テキストを**空白でしか分割しませ�
 空白がないため、文がまるごと1トークンになり、文中の語句(例:「検索」)で
 ヒットしない問題があります。
 
-本構成では `quartz/search-cjk.patch` をビルド時に適用し、CJK(日本語・中国語・
-韓国語)文字を1文字ずつトークン化する encoder に差し替えています(Quartz v5 と
-同等の対応)。これにより、日本語の文中の語句でも全文検索がヒットするようになります。
+本構成では `quartz/search-cjk.patch` をビルド時に適用し、CJK(日本語・中国語・韓国語)文字を1文字ずつトークン化する encoder に差し替えています。
+これにより、日本語の文中の語句でも全文検索がヒットするようになります。
 
 - 適用はイメージビルド時に自動(`Dockerfile` 内の `git apply search-cjk.patch`)
 - 不要な場合は `Dockerfile` の該当行を削除して `docker compose build`
@@ -137,9 +136,3 @@ Quartzはビルド開始時に出力ディレクトリを**ディレクトリご
 
 という手順にしています(`webhook-server.js` の `publish()`)。
 古くなったファイルは同期時に削除されるので、公開内容は毎回ビルド結果と一致します。
-
-## 元の構成からの変更点
-
-- Quartz本体一式をリポジトリから排除し、Dockerイメージ内で取得（フォルダのごちゃつき解消）
-- 公開対象を `vault/deploy` サブフォルダ限定 → vault全体に変更
-- webhookを「vault/deployをcontentへコピー」等の多段処理から、`pull → build` の2ステップに簡略化

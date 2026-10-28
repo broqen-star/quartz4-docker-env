@@ -1,15 +1,14 @@
 services:
   # ---- Gitea: Obsidian vault(md)を管理するGitサーバー ----
   gitea:
-    image: gitea/gitea:latest
+    image: gitea/gitea:28
     environment:
       - GITEA__database__DB_TYPE=postgres
       - GITEA__database__HOST=db:5432
       - GITEA__database__NAME=gitea
       - GITEA__database__USER=gitea
       - GITEA__database__PASSWD=gitea
-      # コンテナ内(quartz:4000)へwebhookを飛ばせるように許可
-      - GITEA__webhook__ALLOWED_HOST_LIST=*
+      - GITEA__security__ALLOWED_HOST_LIST=172.30.0.0/24
     ports:
       - "3000:3000"   # Web UI
       - "222:22"      # SSH (git用)
@@ -66,3 +65,8 @@ services:
     depends_on:
       - quartz
     restart: unless-stopped
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24

@@ -2,7 +2,7 @@
 
 Obsidianで作ったコンテンツを、スタンドアロン環境のWebサーバーに公開する構成です。
 
-- **Gitea** … Obsidian vault(Markdown)を管理するGitサーバー
+- **Gitea (v28系)** … Obsidian vault(Markdown)を管理するGitサーバー
 - **PostgreSQL** … Gitea用のDB
 - **Quartz** … MarkdownをHTMLへビルド。webhookの受け口も兼ねる
 - **Nginx** … 生成されたサイトを配信
@@ -79,6 +79,15 @@ git clone http://<サーバー>:3000/<user>/vault.git content
 
 以降、pushするたびに自動でビルドされます。
 
+> **Gitea v28 の webhook 宛先制限について**
+>
+> v28 から webhook の送信先は egress policy で制限され、`quartz` のような
+> プライベートIP宛ては **IP/CIDR で明示的に許可**する必要があります
+> (ホスト名や `*` では許可されません)。
+> 本構成では Docker ネットワークのサブネットを `172.30.0.0/24` に固定し、
+> その範囲を `GITEA__security__ALLOWED_HOST_LIST` で許可しています。
+> 詳しくは「Gitea v28 対応について」を参照してください。
+
 ### 6. 閲覧
 
 `http://<サーバー>` にアクセス。
@@ -109,6 +118,13 @@ curl -X POST http://<サーバー>:4000/webhook
 
 - 公開ドメイン: `quartz/quartz.config.ts` の `baseUrl` を実際の値に変更
 - Quartzのバージョン: `quartz/Dockerfile` の `ARG QUARTZ_VERSION` を変更して `docker compose build`
+- Giteaのバージョン: `docker-compose.yml` の `image: gitea/gitea:28` はメジャーバージョン固定。
+  パッチ更新は `docker compose pull gitea && docker compose up -d gitea` で取り込めます。
+  次のメジャー(29など)へ上げるときはリリースノートの Breaking changes を確認してから変更してください
+  (Giteaはダウングレード非対応です)
+- Dockerネットワークのサブネット: `docker-compose.yml` 末尾の `networks` で `172.30.0.0/24` に固定。
+  サーバー上の他のネットワークと重なる場合は、ここと `GITEA__security__ALLOWED_HOST_LIST` を同じ値に変更し、
+  `docker compose down && docker compose up -d` で作り直してください
 - DB認証情報: `docker compose.yml` の `gitea` / `db` 環境変数（本番では変更推奨）
 
 ## 日本語(全文検索)対応について
@@ -136,3 +152,73 @@ Quartzはビルド開始時に出力ディレクトリを**ディレクトリご
 
 という手順にしています(`webhook-server.js` の `publish()`)。
 古くなったファイルは同期時に削除されるので、公開内容は毎回ビルド結果と一致します。
+
+## Gitea v28 対応について
+
+Gitea v28 で webhook の送信先制限の仕組みが変わりました。本構成は以下の設定で対応しています。
+
+```yaml
+  gitea:
+    image: gitea/gitea:28
+    environment:
+      # ...
+      - GITEA__security__ALLOWED_HOST_LIST=172.30.0.0/24
+
+# ...
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+```
+
+- `[webhook] ALLOWED_HOST_LIST` は廃止され、`[security] ALLOWED_HOST_LIST` に移行
+- ワイルドカード `*` は使用不可
+- プライベートIP宛ては、ホスト名ではなく IP/CIDR の指定が必須
+- コンテナのIPは作り直すたびに変わり得るため、サブネットを固定して範囲で許可しています
+
+### v27以前の環境からアップグレードする場合
+
+旧構成では `GITEA__webhook__ALLOWED_HOST_LIST=*` を設定していました。
+Giteaの公式イメージは起動時に `GITEA__` 環境変数を `app.ini` へ**追加・上書きしますが、削除はしません**。
+そのため docker-compose.yml から環境変数を消しても `app.ini` に旧設定が残り、
+**新しい `[security]` の設定より優先されて webhook が拒否され続けます**。
+
+以下の手順で旧設定を削除してください。
+
+1. docker-compose.yml を上記の内容に更新する(`GITEA__webhook__ALLOWED_HOST_LIST` は削除)
+2. ネットワークごと作り直す(データはホスト側に残ります。`-v` は付けないこと)
+
+   ```bash
+   docker compose down
+   docker compose up -d
+   ```
+
+3. Giteaを停止し、`app.ini` をバックアップしてから `[webhook]` の `ALLOWED_HOST_LIST = *` を削除する
+
+   ```bash
+   docker compose stop gitea
+   sudo cp -p ./gitea/gitea/conf/app.ini ./gitea/gitea/conf/app.ini.bak
+   sudo sed -i '/^\[webhook\]/,/^\[/{/^ALLOWED_HOST_LIST *= *\*$/d}' ./gitea/gitea/conf/app.ini
+   docker compose start gitea
+   ```
+
+4. Giteaのwebhook設定画面で「テスト配信」を行い、`docker compose logs quartz` に
+   `Webhook received.` → `Build complete.` が出れば完了
+
+新規構築の場合は旧設定が `app.ini` に書き込まれないため、この手順は不要です。
+
+### トラブルシューティング
+
+- `denied by egress policy: quartz(172.x.x.x) needs an explicit IP allow entry (non-public address)`
+  - `ALLOWED_HOST_LIST` にquartzのIPを含むCIDRが入っているか確認
+  - ログに `Deprecation: config option [webhook].ALLOWED_HOST_LIST present` が出ていれば、`app.ini` に旧設定が残っている(上記手順3)
+- `lookup db on 127.0.0.11:53: server misbehaving` でGiteaが起動しない
+  - ネットワーク変更後に古いコンテナが残っている。`docker compose down && docker compose up -d` で作り直す
+- 起動直後のquartzログに `Failed to connect to gitea port 3000`
+  - Giteaの起動完了前に初回ビルドが走っただけ。webhookが届けば再ビルドされるので問題なし
+- 設定の反映方法
+  - environment の変更は `docker compose up -d`(`restart` では反映されない)
+  - 現在の設定値は `docker compose exec gitea grep -n -A5 '^\[security\]' /data/gitea/conf/app.ini` で確認できる
+  
